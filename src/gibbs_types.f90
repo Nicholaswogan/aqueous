@@ -1,18 +1,18 @@
 module gibbs_types
-  use iso_fortran_env, only: dp => real64
+  use gibbs_constants, only: dp, STR_LEN
   implicit none
   
   type :: GibbsData
     integer :: natoms
     integer :: nsp
-    character(len=20), allocatable :: species_names(:)
-    character(len=20), allocatable :: atoms_names(:)
+    character(len=STR_LEN), allocatable :: species_names(:)
+    character(len=STR_LEN), allocatable :: atoms_names(:)
     integer, allocatable :: species_atoms(:,:)
     real(dp), allocatable :: coeffs(:,:)
   end type
   
   type, extends(GibbsData) :: AllData
-    character(len=20), allocatable :: alt_names(:)
+    character(len=STR_LEN), allocatable :: alt_names(:)
   end type
   
   type(AllData) :: as
