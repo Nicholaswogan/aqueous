@@ -10,21 +10,135 @@ module gibbs_equilibrium
   
   type :: AqueousSolution
     type(GibbsData) :: d
-    real(dp), allocatable :: x(:)
-    type(nlopt_opt) :: opt
+    
+    real(dp), allocatable :: DG(:)
+    real(dp), allocatable :: n_init(:)
+    real(dp), allocatable :: m_init(:)
+    real(dp), allocatable :: n_opt(:)
+    real(dp), allocatable :: m_opt(:)
+    real(dp), allocatable :: atoms_init(:)
+    real(dp), allocatable :: T
+    real(dp), allocatable :: P
+    
   contains
     procedure :: init => AqueousSolution_init
+    procedure :: equilibrate => AqueousSolution_equilibrate
   end type
 
 contains
+  
+  subroutine AqueousSolution_equilibrate(self, m, T, P, err)
+    use gibbs_constants, only: Rgas, mu_H2O
+    use gibbs_database, only: gibbs_energy_eval
+    ! use nlopt_enum, only : NLOPT_SUCCESS
+    
+    use nlopt_wrap, only : create, nlopt_func, nlopt_mfunc
+    use nlopt_enum, only : algorithm_from_string, NLOPT_SUCCESS
+    
+    class(AqueousSolution), intent(inout), target :: self
+    real(dp), intent(in) :: m(:)
+    real(dp), intent(in) :: T
+    real(dp), intent(in) :: P
+    character(len=:), allocatable, intent(out) :: err
+    
+    real(dp), parameter :: kg_H2O = 1.0_dp
+    real(dp), parameter :: mol_H2O = kg_H2O/mu_H2O
+    real(dp), parameter :: xtol = 1.0e-5_dp
+    
+    integer :: i, stat
+    logical :: found
+    real(dp) :: minf
+    type(nlopt_opt) :: opt
+    
+    real(dp), allocatable :: tol(:), lb(:), ub(:)
+    type(nlopt_func) :: f
+    type(nlopt_mfunc) :: fc
+    
+    if (size(m) /= self%d%nsp-1) then
+      err = 'Input "m" has the wrong size.'
+      return
+    endif
+  
+    self%m_init = m
+    self%n_init(1) = mol_H2O
+    self%n_init(2:) = m*kg_H2O
+    
+    do i = 1,self%d%natoms
+      self%atoms_init(i) = sum(self%d%species_atoms(i,:)*self%n_init)
+    enddo
+    
+    ! T, P
+    self%T = T
+    self%P = P
+    
+    do i = 1,self%d%nsp
+      call gibbs_energy_eval(self%d%thermo(i), T, P, found, self%DG(i))
+      if (.not. found) then
+        err = 'Species "'//trim(self%d%species_names(i))//'" has no thermodynamic data for input temperature.'
+        return
+      endif
+    enddo
+    
+    ! setup nlopt 
+    call create(opt, algorithm_from_string("GN_ISRES"), self%d%nsp)
+    ! LD_SLSQP
+    ! GN_ISRES
+    
+    f = nlopt_func(AqueousSolution_obj, self)
+    fc = nlopt_mfunc(AqueousSolution_con, self)
+    
+    call opt%set_min_objective(f, stat)
+    if (stat /= NLOPT_SUCCESS) then
+      err = "NLOPT setup failed"
+      return
+    endif
+    
+    allocate(lb(self%d%nsp))
+    lb = 0.0_dp
+    call opt%set_lower_bounds(lb, stat)
+    if (stat /= NLOPT_SUCCESS) then
+      err = "NLOPT setup failed"
+      return
+    endif
+    
+    allocate(ub(self%d%nsp))
+    ub = 100.0_dp
+    call opt%set_upper_bounds(ub, stat)
+    if (stat /= NLOPT_SUCCESS) then
+      err = "NLOPT setup failed"
+      return
+    endif
+    
+    allocate(tol(self%d%natoms))
+    tol = 1.0e-12_dp
+    call opt%add_equality_mconstraint(self%d%natoms, fc, tol, stat)
+    if (stat /= NLOPT_SUCCESS) then
+      err = "NLOPT setup failed"
+      return
+    endif
+    
+    call opt%set_xtol_rel(xtol)
+    
+    self%n_opt = self%n_init
+    call opt%optimize(self%n_opt, minf, stat)
+    if (stat < NLOPT_SUCCESS) then
+      err = "NLOPT optimization failed"
+      return
+    endif
+    
+    self%m_opt = self%n_opt(2:)/(self%n_opt(1)*mu_H2O)
+    
+  end subroutine
 
   function AqueousSolution_obj(x, gradient, func_data) result(f)
+    use gibbs_constants, only: Rgas, mu_H2O
     real(dp), intent(in) :: x(:)
     real(dp), intent(inout), optional :: gradient(:)
     class(*), intent(in), optional :: func_data
     real(dp) :: f
     
     type(AqueousSolution), pointer :: s
+    integer :: i
     
     select type(func_data)
     type is(AqueousSolution)
@@ -32,90 +146,102 @@ contains
     end select
     
     if (present(gradient)) then
+      gradient(1) = s%DG(1) + sum(-x(2:)*Rgas*s%T/x(1))
+      do i = 2,size(gradient)
+        gradient(i) = s%DG(i) + Rgas*s%T + Rgas*s%T*log(x(i)) &
+                     - Rgas*s%T*log(x(1)) - Rgas*s%T*log(mu_H2O)
+      enddo
+      
+      ! gradient(1) = s%DG(1) + (Rgas*s%T/x(1))*sum(-x(2:))
+      ! do i = 2,size(gradient)
+      !   gradient(i) = s%DG(i) + Rgas*s%T*log(x(i)/x(1)/mu_H2O)
+      ! enddo
       
     endif
     
-    f = 1.0_dp
+    f = x(1)*s%DG(1) + sum(x(2:)*(s%DG(2:) + Rgas*s%T*log(x(2:)/x(1)/mu_H2O)))
+    
+    ! f = x(1)*(s%DG(1) - (sum(x(2:))/x(1))*Rgas*s%T) + sum(x(2:)*(s%DG(2:) + Rgas*s%T*log(x(2:)/x(1)/mu_H2O)))
+    
     
   end function
   
-  subroutine AqueousSolution_init(self, infile, err)
-    use nlopt_wrap, only : create, nlopt_func
-    use nlopt_enum, only : algorithm_from_string
-    use fortran_yaml_c, only: parse, error_length
-    use yaml_types, only: type_node, type_dictionary, type_error, real_kind, &
-                          type_list, type_list_item, type_scalar
+  subroutine AqueousSolution_con(result, x, gradient, func_data)
+      real(dp), intent(inout) :: result(:)
+      real(dp), intent(in) :: x(:)
+      real(dp), intent(inout), optional :: gradient(:)
+      class(*), intent(in), optional :: func_data
+      
+      type(AqueousSolution), pointer :: s
+      integer :: i, j, n, m
+      
+      select type(func_data)
+      type is(AqueousSolution)
+        s => func_data
+      end select
+      
+      m = s%d%natoms
+      n = s%d%nsp
+      
+      if (present(gradient)) then
+        do j = 1,m
+          do i = 1,n
+            gradient(i+(j-1)*n) = s%d%species_atoms(j,i)
+          enddo
+        enddo
+      endif
+      
+      do i = 1,m
+        result(i) = sum(s%d%species_atoms(i,:)*x)
+      enddo
+      result = result - s%atoms_init
+      
+
+    end subroutine
+  
+  subroutine AqueousSolution_init(self, species, err)
+    use nlopt_wrap, only : create, nlopt_func, nlopt_mfunc
+    use nlopt_enum, only : algorithm_from_string, NLOPT_SUCCESS
     
     class(AqueousSolution), intent(inout), target :: self
-    character(len=*), intent(in) :: infile
+    character(len=STR_LEN), intent(in) :: species(:)
     character(len=:), allocatable, intent(out) :: err
-
-    class(type_node), pointer :: root
-    character(len=error_length) :: error
     
-    real(dp) :: lb(2),x(2), minf
     integer :: stat, i
-    real(dp), parameter :: xtol = 1.0e-4_dp
+    real(dp), allocatable :: tol(:), lb(:), ub(:)
+    type(nlopt_func) :: f
+    type(nlopt_mfunc) :: fc
     
-    root => parse(infile, error = error)
-    if (error/='') then
-      print*,trim(error)
-      stop 1
-    endif
-  
-    select type (root)
-    class is (type_list)
-      call process_datafile(root, self%d, self%x, err)
-    end select
-  
-    call root%finalize()
-    deallocate(root)
+    call process_species(species, self%d, err)
+    if (allocated(err)) return
     
-    ! setup nlopt 
-    ! call create(self%opt, algorithm_from_string("LD_MMA"), self%d%nsp)
-    
-    ! set constrains and functions
-    
+    ! other allocations
+    allocate(self%DG(self%d%nsp))
+    allocate(self%n_init(self%d%nsp))
+    allocate(self%m_init(self%d%nsp-1))
+    allocate(self%n_opt(self%d%nsp))
+    allocate(self%m_opt(self%d%nsp-1))
+    allocate(self%atoms_init(self%d%natoms))
+
   end subroutine
   
-  subroutine process_datafile(root, dat, x, err)
+  subroutine process_species(species, dat, err)
     use gibbs_database, only: find_species_ind
     use gibbs_types, only: as
-    use yaml_types, only: type_node, type_dictionary, type_error, real_kind, &
-                          type_list, type_list_item, type_scalar, type_key_value_pair
-                    
-    type(type_list), intent(in) :: root
+    
+    character(len=STR_LEN), intent(in) :: species(:)
     type(GibbsData), intent(out) :: dat
-    real(dp), allocatable, intent(out) :: x(:)
     character(len=:), allocatable, intent(out) :: err
     
     character(len=:), allocatable :: dups
-    type(type_list_item), pointer :: item
-    type (type_error), pointer :: io_err
     integer :: i, j, ind, k
     integer, allocatable :: inds(:)
     logical, allocatable :: existing_atoms(:)
     
-    dat%nsp = root%size()
+    dat%nsp = size(species) + 1
     allocate(dat%species_names(dat%nsp))
-    allocate(x(dat%nsp))
-    
-    j = 1
-    item => root%first
-    do while(associated(item))
-      select type (dict => item%node)
-      class is (type_dictionary)
-        dat%species_names(j) = dict%get_string("name",error=io_err)
-        if (associated(io_err)) then; err = trim(io_err%message); return; endif
-          
-        x(j) = dict%get_real("concentration",default=0.0_dp,error=io_err)
-      class default
-        err = "Each entry in the data file must be a dictionary."
-        return
-      end select
-      item => item%next
-      j = j + 1
-    enddo
+    dat%species_names(1) = "H2O"
+    dat%species_names(2:) = species
     
     allocate(inds(dat%nsp))
     
@@ -126,6 +252,12 @@ contains
     enddo
     
     ! Check that all inds are unique
+    ind = findloc(species, "H2O", 1)
+    if (ind /= 0) then
+      err = 'Do not include "H2O" as a species. It is added automatically.'
+      return
+    endif
+    
     do i = 1,dat%nsp
       do j = i+1,dat%nsp
         if (inds(i) == inds(j)) then
@@ -137,9 +269,9 @@ contains
       enddo
     enddo
     
-    allocate(dat%coeffs(10,dat%nsp))
+    allocate(dat%thermo(dat%nsp))
     do j = 1,dat%nsp
-      dat%coeffs(:,j) = as%coeffs(:,inds(j))
+      dat%thermo(j) = as%thermo(inds(j))
     enddo
     
     allocate(existing_atoms(as%natoms))

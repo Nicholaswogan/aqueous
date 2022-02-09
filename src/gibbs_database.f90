@@ -2,9 +2,120 @@ module gibbs_database
   use gibbs_constants, only: dp, STR_LEN
   implicit none
   
+  public
+  
 contains
+    
+  function gibbs_energy(species, T, P, err) result(G)
+    use gibbs_types, only: as
+    character(len=*), intent(in) :: species
+    real(dp), intent(in) :: T, P
+    character(len=:), allocatable, intent(out) :: err
+    
+    real(dp) :: G
+    integer :: ind
+    logical :: found
+    
+    ind = find_species_ind(species, as%species_names, as%alt_names, err)
+    if (allocated(err)) return 
+    
+    call gibbs_energy_eval(as%thermo(ind), T, P, found, G)
+    if (.not. found) then
+      err = 'Species "'//trim(species)//'" has no thermodynamic data for input temperature.'
+      return
+    endif
+    
+  end function
+  
+  pure subroutine gibbs_energy_eval(thermo, T, P, found, gibbs_energy)
+    use gibbs_types, only: ThermodynamicData
+    
+    type(ThermodynamicData), intent(in) :: thermo
+    real(dp), intent(in) :: T, P
+    logical, intent(out) :: found
+    real(dp), intent(out) :: gibbs_energy
+    
+    integer :: k
+    
+    found = .false.
+    do k = 1,thermo%ntemps
+      if (T >= thermo%temps(k) .and. &
+          T <  thermo%temps(k+1)) then
+          
+        found = .true.
+        if (thermo%dtype == 1) then ! aqueous
+          ! check to see if liquid phase is possible
+          gibbs_energy = gibbs_energy_sprons96(thermo%data(:,k), T, P)
+        elseif (thermo%dtype == 2) then
+          gibbs_energy = gibbs_energy_nasa9(thermo%data(:,k), T)
+        endif
+        
+        exit
+        
+      endif
+    enddo
 
-  function gibbs_energy_coeff(coef, T, P) result(G)
+  end subroutine
+  
+  function find_species_ind(species, species_names, alt_names, err) result(ind)
+    character(len=*), intent(in) :: species
+    character(len=STR_LEN), intent(in) :: species_names(:)
+    character(len=STR_LEN), intent(in) :: alt_names(:)
+    character(len=:), allocatable, intent(out) :: err
+    
+    integer :: ind
+    
+    character(len=:), allocatable :: dups
+    integer :: i
+    
+    ind = findloc(species_names, species, 1)
+    if (ind == 0) then
+      ind = findloc(alt_names, species, 1)
+      if (ind == 0) then
+        err = '"'//trim(species)//'" is not in the data base.'
+        return 
+      else
+        ! check that entry is unique
+        do i = 1,size(species_names)
+          if (i == ind) cycle
+          if (alt_names(ind) == alt_names(i)) then
+            if (.not. allocated(dups)) then
+              dups = '{unique-name: "'//trim(species_names(ind))//'", alt-name: "'//trim(alt_names(ind))//'"}'
+            endif
+            dups = dups//', {unique-name: "'//trim(species_names(i))//'", alt-name: "'//trim(alt_names(i))//'"}'
+          endif
+        enddo
+        if (allocated(dups)) then
+          err = '"'//trim(species)//'" is not a unique entry in the database. '//dups
+          return
+        endif
+      endif
+    endif
+    
+  end function
+  
+  pure function gibbs_energy_nasa9(coeffs, T) result(gibbs)
+    use gibbs_constants, only: Rgas
+    real(dp), intent(in) :: coeffs(9)
+    real(dp), intent(in) :: T
+    real(dp) :: gibbs
+    
+    real(dp) :: enthalpy, entropy
+    
+    enthalpy = (- coeffs(1)*T**(-2.0_dp) + coeffs(2)*log(T)/T &
+                + coeffs(3) + coeffs(4)*T/2.0_dp + coeffs(5)*T**(2.0_dp)/3.0_dp &
+                + coeffs(6)*T**(3.0_dp)/4.0_dp + coeffs(7)*T**(4.0_dp)/5.0_dp &
+                + coeffs(8)/T)*T*Rgas
+             
+    entropy = (- coeffs(1)*T**(-2.0_dp)/2.0_dp - coeffs(2)*T**(-1.0_dp) &
+               + coeffs(3)*log(T) + coeffs(4)*T + coeffs(5)*T**(2.0_dp)/2.0_dp &
+               + coeffs(6)*T**(3.0_dp)/3.0_dp + coeffs(7)*T**(4.0_dp)/4.0_dp &
+               + coeffs(9))*Rgas
+               
+    gibbs = enthalpy - T*entropy
+  end function
+  
+  pure function gibbs_energy_sprons96(coef, T, P) result(G)
     real(dp), intent(in) :: coef(10), T, P
     real(dp) :: G
     
@@ -50,56 +161,6 @@ contains
   
   end function
   
-  function gibbs_energy(species, T, P, err) result(G)
-    use gibbs_types, only: as
-    character(len=*), intent(in) :: species
-    real(dp), intent(in) :: T, P
-    character(len=:), allocatable, intent(out) :: err
-    
-    real(dp) :: G
-    integer :: ind
-    
-    ind = find_species_ind(species, as%species_names, as%alt_names, err)
-    G = gibbs_energy_coeff(as%coeffs(:,ind), T, P)
-  end function
-  
-  function find_species_ind(species, species_names, alt_names, err) result(ind)
-    character(len=*), intent(in) :: species
-    character(len=STR_LEN), intent(in) :: species_names(:)
-    character(len=STR_LEN), intent(in) :: alt_names(:)
-    character(len=:), allocatable, intent(out) :: err
-    
-    integer :: ind
-    
-    character(len=:), allocatable :: dups
-    integer :: i
-    
-    ind = findloc(species_names, species, 1)
-    if (ind == 0) then
-      ind = findloc(alt_names, species, 1)
-      if (ind == 0) then
-        err = '"'//trim(species)//'" is not in the data base.'
-        return 
-      else
-        ! check that entry is unique
-        do i = 1,size(species_names)
-          if (i == ind) cycle
-          if (alt_names(ind) == alt_names(i)) then
-            if (.not. allocated(dups)) then
-              dups = '{unique-name: "'//trim(species_names(ind))//'", alt-name: "'//trim(alt_names(ind))//'"}'
-            endif
-            dups = dups//', {unique-name: "'//trim(species_names(i))//'", alt-name: "'//trim(alt_names(i))//'"}'
-          endif
-        enddo
-        if (allocated(dups)) then
-          err = '"'//trim(species)//'" is not a unique entry in the database. '//dups
-          return
-        endif
-      endif
-    endif
-    
-  end function
-  
   subroutine load_spronsbl(path)
     use gibbs_types, only: as
     use fortran_yaml_c, only: parse, error_length
@@ -138,7 +199,7 @@ contains
                           type_list, type_list_item, type_scalar, type_key_value_pair
                     
     type(type_dictionary), intent(in) :: root
-    type(AllData), intent(out) :: as
+    type(AllData), intent(inout) :: as
     character(len=:), allocatable, intent(out) :: err
     
     type(type_key_value_pair), pointer :: key_value_pair
@@ -146,6 +207,7 @@ contains
     type(type_list), pointer :: atoms, species, list1
     type(type_dictionary), pointer :: dict
     type (type_error), pointer :: io_err
+    character (len=:), allocatable :: tmp
     logical :: success
     integer :: j, i
 
@@ -172,7 +234,7 @@ contains
     allocate(as%species_names(as%nsp))
     allocate(as%alt_names(as%nsp))
     allocate(as%species_atoms(as%natoms, as%nsp))
-    allocate(as%coeffs(10, as%nsp))
+    allocate(as%thermo(as%nsp))
     
     j = 1
     item => species%first
@@ -191,22 +253,23 @@ contains
           if (associated(io_err)) then; err = trim(io_err%message); return; endif
         enddo
         
-        list1 => element%get_list("thermo",required=.true.,error = io_err)
+        dict => element%get_dictionary("thermo",required=.true.,error = io_err)
         if (associated(io_err)) then; err = trim(io_err%message); return; endif
-        i = 1
-        item1 => list1%first
-        do while(associated(item1))
-          select type (scal => item1%node)
-          class is (type_scalar)
-            as%coeffs(i,j) = scal%to_real(default=1.0_dp,success=success)
-            if (.not. success) then
-              err = "Issue converting string or scalar!"
-              return
-            endif
-          end select
-          item1 => item1%next
-          i = i + 1
-        enddo
+        
+        tmp = trim(dict%get_string("model",error = io_err))
+        if (associated(io_err)) then; err = trim(io_err%message); return; endif
+        
+        if (tmp == "sprons96") then
+          call get_sprons96_thermo(dict, as%thermo(j), err)
+          if (allocated(err)) return
+        elseif (tmp == "nasa9-sprons96") then
+          call get_nasa9_thermo(dict, as%thermo(j), err)
+          if (allocated(err)) return
+        else
+          err = "Unknown thermodynamic type: "//tmp
+          return
+        endif
+        
       end select
       item => item%next
       j = j + 1
@@ -214,30 +277,129 @@ contains
     
   end subroutine
   
-  ! useless!
-  pure function dielectric(T_in, P_in) result(di)
-    real(dp), intent(in) :: T_in, P_in
-    real(dp) :: di
+  subroutine get_sprons96_thermo(dict, thermo, err)
+    use gibbs_types, only: ThermodynamicData
+    use yaml_types, only: type_dictionary, type_error, &
+                          type_list, type_list_item, type_scalar
     
-    real(dp), parameter :: a(8) = [-22.5713_dp, -0.032066_dp, -0.00028568_dp,&
-                                   0.0011832_dp, 0.000027895_dp, -0.00000001476_dp,&
-                                   2300.64_dp, -0.13476_dp]
-    real(dp), parameter :: D0 = 4.476150
-    real(dp) :: T, P
+    type(type_dictionary), intent(in) :: dict
+    type(ThermodynamicData), intent(out) :: thermo
+    character(len=:), allocatable, intent(out) :: err
     
-    T = T_in - 273.15_dp
-    P = P_in - 1.0_dp
+    type(type_list_item), pointer :: item
+    type(type_list), pointer :: list
+    type (type_error), pointer :: io_err
+    logical :: success
+    integer :: i
     
-    di = exp(D0 &
-            + 2_dp*a(1)*P &
-            + 2_dp*a(2)*P*T &
-            + 2_dp*a(3)*P*T**2_dp &
-            + 2_dp*a(4)*P**2_dp &
-            + 2_dp*a(5)*P**2_dp*T &
-            + 2_dp*a(6)*P**2_dp*T**2_dp &
-            + 2_dp*a(7)*T &
-            + 2_dp*a(8)*T**2_dp)
+    thermo%dtype = 1
+    thermo%ntemps = 1
+    allocate(thermo%temps(2))
+    allocate(thermo%data(10,1))
+    
+    list = dict%get_list("temperature-ranges",required=.true.,error = io_err)
+    if (associated(io_err)) then; err = trim(io_err%message); return; endif
+    i = 1
+    item => list%first
+    do while(associated(item))
+      select type (scal => item%node)
+      class is (type_scalar)
+        thermo%temps(i) = scal%to_real(default=1.0_dp,success=success)
+        if (.not. success) then
+          err = "Issue converting string or scalar!"
+          return
+        endif
+      end select
+      item => item%next
+      i = i + 1
+    enddo
+    
+    list = dict%get_list("data",required=.true.,error = io_err)
+    
+    i = 1
+    item => list%first
+    do while(associated(item))
+      select type (scal => item%node)
+      class is (type_scalar)
+        thermo%data(i,1) = scal%to_real(default=1.0_dp,success=success)
+        if (.not. success) then
+          err = "Issue converting string or scalar!"
+          return
+        endif
+      end select
+      item => item%next
+      i = i + 1
+    enddo
 
-  end function
+  end subroutine
+  
+  subroutine get_nasa9_thermo(dict, thermo, err)
+    use gibbs_types, only: ThermodynamicData
+    use yaml_types, only: type_dictionary, type_error, &
+                          type_list, type_list_item, type_scalar
+    
+    type(type_dictionary), intent(in) :: dict
+    type(ThermodynamicData), intent(out) :: thermo
+    character(len=:), allocatable, intent(out) :: err
+    
+    type(type_list_item), pointer :: item, item1
+    type(type_list), pointer :: list
+    type (type_error), pointer :: io_err
+    logical :: success
+    integer :: j, i
+    
+    thermo%dtype = 2
+    
+    list = dict%get_list("temperature-ranges",required=.true.,error = io_err)
+    if (associated(io_err)) then; err = trim(io_err%message); return; endif
+      
+    thermo%ntemps = list%size() - 1
+    allocate(thermo%temps(thermo%ntemps + 1))
+      
+    i = 1
+    item => list%first
+    do while(associated(item))
+      select type (scal => item%node)
+      class is (type_scalar)
+        thermo%temps(i) = scal%to_real(default=1.0_dp,success=success)
+        if (.not. success) then
+          err = "Issue converting string or scalar!"
+          return
+        endif
+      end select
+      item => item%next
+      i = i + 1
+    enddo
+    
+    list = dict%get_list("data",required=.true.,error = io_err)
+  
+    allocate(thermo%data(9, thermo%ntemps))
+    
+    i = 1
+    item => list%first
+    do while(associated(item))
+      select type (list1 => item%node)
+      class is (type_list)
+        
+        j = 1
+        item1 => list1%first
+        do while(associated(item1))
+          select type (scal => item1%node)
+          class is (type_scalar)
+            thermo%data(j,i) = scal%to_real(default=1.0_dp,success=success)
+            if (.not. success) then
+              err = "Issue converting string or scalar!"
+              return
+            endif
+          end select
+          item1 => item1%next
+          j = j + 1
+        enddo
+      end select
+      item => item%next
+      i = i + 1
+    enddo
+
+  end subroutine
   
 end module

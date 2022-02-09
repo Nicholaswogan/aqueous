@@ -17,7 +17,7 @@ cdef load_spronsbl():
   
 load_spronsbl()
 
-cpdef api double gibbs_energy(str species, double T, double P):
+cpdef api double gibbs_energy(str species, double T, double P) except? -1.0:
   cdef int64_t species_len
   cdef char *species_c
   cdef int64_t err_len
