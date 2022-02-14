@@ -14,7 +14,14 @@ set(CMAKE_Fortran_MODULE_DIRECTORY "${CMAKE_BINARY_DIR}/modules")
 include(cmake/CPM.cmake)
 
 CPMAddPackage("gh:Nicholaswogan/fortran-yaml-c@0.1.0")
-CPMAddPackage("gh:grimme-lab/nlopt-f@0.1.0")
+# CPMAddPackage("gh:grimme-lab/nlopt-f@0.1.0")
+
+CPMAddPackage(
+  NAME nlopt-f
+  VERSION 0.1.1
+  URL "https://github.com/Nicholaswogan/nlopt-f/archive/refs/heads/jacobian_patch.zip"
+  EXCLUDE_FROM_ALL ON
+)
 
 add_subdirectory(src)
 

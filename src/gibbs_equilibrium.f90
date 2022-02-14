@@ -20,6 +20,12 @@ module gibbs_equilibrium
     real(dp), allocatable :: T
     real(dp), allocatable :: P
     
+    real(dp) :: xtol = 1.0e-9_dp
+    real(dp) :: conserv_tol = 1.0e-9_dp
+    real(dp) :: lb = 1.0e-50_dp
+    real(dp) :: ub = 5.0_dp
+    character(len=STR_LEN) :: algorithm = "LD_MMA"
+    
   contains
     procedure :: init => AqueousSolution_init
     procedure :: equilibrate => AqueousSolution_equilibrate
@@ -33,7 +39,7 @@ contains
     ! use nlopt_enum, only : NLOPT_SUCCESS
     
     use nlopt_wrap, only : create, nlopt_func, nlopt_mfunc
-    use nlopt_enum, only : algorithm_from_string, NLOPT_SUCCESS
+    use nlopt_enum, only : NLOPT_SUCCESS, algorithm_from_string, result_to_string
     
     class(AqueousSolution), intent(inout), target :: self
     real(dp), intent(in) :: m(:)
@@ -43,14 +49,13 @@ contains
     
     real(dp), parameter :: kg_H2O = 1.0_dp
     real(dp), parameter :: mol_H2O = kg_H2O/mu_H2O
-    real(dp), parameter :: xtol = 1.0e-5_dp
     
-    integer :: i, stat
+    integer :: i, stat, algorithm
     logical :: found
     real(dp) :: minf
-    type(nlopt_opt) :: opt
+    type(nlopt_opt) :: opt, opt_other
     
-    real(dp), allocatable :: tol(:), lb(:), ub(:)
+    real(dp), allocatable :: tol(:), lb(:), ub(:), w(:)
     type(nlopt_func) :: f
     type(nlopt_mfunc) :: fc
     
@@ -67,7 +72,6 @@ contains
       self%atoms_init(i) = sum(self%d%species_atoms(i,:)*self%n_init)
     enddo
     
-    ! T, P
     self%T = T
     self%P = P
     
@@ -80,50 +84,69 @@ contains
     enddo
     
     ! setup nlopt 
-    call create(opt, algorithm_from_string("GN_ISRES"), self%d%nsp)
-    ! LD_SLSQP
-    ! GN_ISRES
+    call create(opt, algorithm_from_string("AUGLAG_EQ"), self%d%nsp)
+    
+    allocate(w(self%d%nsp))
+    w = 1.0_dp
+    w(1) = 0.0_dp
+    call opt%set_xtol_rel(self%xtol)
+    call opt%set_x_weights(w)
+    
+    ! Set Optimizer
+    algorithm = algorithm_from_string(trim(self%algorithm))
+    if (algorithm == -1) then
+      err = "Not a valid algorithm: "//trim(self%algorithm)
+      return
+    endif
+    call create(opt_other, algorithm, self%d%nsp)
+    call opt_other%set_xtol_rel(self%xtol)
+    call opt_other%set_x_weights(w)
+    
+    call opt%set_local_optimizer(opt_other, stat)
+    if (stat /= NLOPT_SUCCESS) then
+      err = "NLOPT setup failed: "//result_to_string(stat)
+      return
+    endif
     
     f = nlopt_func(AqueousSolution_obj, self)
     fc = nlopt_mfunc(AqueousSolution_con, self)
     
     call opt%set_min_objective(f, stat)
     if (stat /= NLOPT_SUCCESS) then
-      err = "NLOPT setup failed"
+      err = "NLOPT setup failed: "//result_to_string(stat)
       return
     endif
     
     allocate(lb(self%d%nsp))
-    lb = 0.0_dp
+    lb(1) = 30.0_dp
+    lb(2:) = self%lb
     call opt%set_lower_bounds(lb, stat)
     if (stat /= NLOPT_SUCCESS) then
-      err = "NLOPT setup failed"
+      err = "NLOPT setup failed: "//result_to_string(stat)
       return
     endif
     
     allocate(ub(self%d%nsp))
-    ub = 100.0_dp
+    ub(1) = 70.0_dp
+    ub(2:) = self%ub
     call opt%set_upper_bounds(ub, stat)
     if (stat /= NLOPT_SUCCESS) then
-      err = "NLOPT setup failed"
+      err = "NLOPT setup failed: "//result_to_string(stat)
       return
     endif
     
     allocate(tol(self%d%natoms))
-    tol = 1.0e-12_dp
+    tol = self%conserv_tol
     call opt%add_equality_mconstraint(self%d%natoms, fc, tol, stat)
     if (stat /= NLOPT_SUCCESS) then
-      err = "NLOPT setup failed"
+      err = "NLOPT setup failed: "//result_to_string(stat)
       return
     endif
-    
-    call opt%set_xtol_rel(xtol)
     
     self%n_opt = self%n_init
     call opt%optimize(self%n_opt, minf, stat)
     if (stat < NLOPT_SUCCESS) then
-      err = "NLOPT optimization failed"
-      return
+      err = "NLOPT optimization failed: "//result_to_string(stat)
     endif
     
     self%m_opt = self%n_opt(2:)/(self%n_opt(1)*mu_H2O)
@@ -163,13 +186,12 @@ contains
     
     ! f = x(1)*(s%DG(1) - (sum(x(2:))/x(1))*Rgas*s%T) + sum(x(2:)*(s%DG(2:) + Rgas*s%T*log(x(2:)/x(1)/mu_H2O)))
     
-    
   end function
   
   subroutine AqueousSolution_con(result, x, gradient, func_data)
       real(dp), intent(inout) :: result(:)
       real(dp), intent(in) :: x(:)
-      real(dp), intent(inout), optional :: gradient(:)
+      real(dp), intent(inout), optional :: gradient(:,:)
       class(*), intent(in), optional :: func_data
       
       type(AqueousSolution), pointer :: s
@@ -186,7 +208,7 @@ contains
       if (present(gradient)) then
         do j = 1,m
           do i = 1,n
-            gradient(i+(j-1)*n) = s%d%species_atoms(j,i)
+            gradient(i,j) = s%d%species_atoms(j,i)
           enddo
         enddo
       endif
@@ -306,78 +328,4 @@ contains
     
   end subroutine
 
-  subroutine tester1()
-    use nlopt_wrap, only : nlopt_func, create, destroy
-    use nlopt_enum, only : NLOPT_SUCCESS, algorithm_from_string
-    implicit none
-    type(nlopt_opt) :: opt
-    real(dp) :: lb(2), x(2), minf
-    integer :: stat, i
-    type(constraint_data), target :: d1, d2
-    real(dp), parameter :: xtol = 1.0e-4_dp
-
-    call create(opt, algorithm_from_string("LD_MMA"), 2)
-
-    call opt%get_lower_bounds(lb)
-    lb(2) = 0.0_dp
-    call opt%set_lower_bounds(lb)
-
-    d1%d = [+2.0_dp, +0.0_dp]
-    d2%d = [-1.0_dp, +1.0_dp]
-    associate(&
-        & f => nlopt_func(myfunc), &
-        & fc1 => nlopt_func(myconstraint, d1), &
-        & fc2 => nlopt_func(myconstraint, d2))
-      call opt%set_min_objective(f)
-      call opt%add_inequality_constraint(fc1, 1.0e-8_dp)
-      call opt%add_inequality_constraint(fc2, 1.0e-8_dp)
-    end associate
-    
-    call opt%set_xtol_rel(xtol)
-    x = [1.234_dp, 5.678_dp]
-    call opt%optimize(x, minf, stat)
-
-    if (stat < NLOPT_SUCCESS) then
-      write(*, '(a)') "NLopt failed!"
-      stop 1
-    endif
-
-    write(*, '(a, *(1x, g0))') "Found minimum at", x
-    write(*, '(a, *(1x, g0))') "Minimum value is", minf
-
-    call destroy(opt)
-  end subroutine
-  
-  function myfunc(x, gradient, func_data) result(f)
-    real(dp), intent(in) :: x(:)
-    real(dp), intent(inout), optional :: gradient(:)
-    class(*), intent(in), optional :: func_data
-    real(dp) :: f
-
-    if (present(gradient)) then
-      gradient(1) = 0.0_dp
-      gradient(2) = 0.5_dp / sqrt(x(2))
-    endif
-    f = sqrt(x(2))
-    
-  end function myfunc
-  
-  function myconstraint(x, gradient, func_data) result(f)
-    real(dp), intent(in) :: x(:)
-    real(dp), intent(inout), optional :: gradient(:)
-    class(*), intent(in), optional :: func_data
-    real(dp) :: f
-
-    select type(func_data)
-    type is(constraint_data)
-      associate(a => func_data%d(1), b => func_data%d(2))
-        if (present(gradient)) then
-          gradient(1) = 3.0_dp * a * (a*x(1) + b)**2
-          gradient(2) = -1.0_dp
-        endif
-        f = (a*x(1) + b)**3 - x(2)
-      end associate
-    end select
-  end function myconstraint
-  
 end module
