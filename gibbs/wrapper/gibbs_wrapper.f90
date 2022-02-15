@@ -4,6 +4,131 @@ module gibbs_wrapper
 
 contains
   
+  subroutine gibbs_alloc_aqueoussolution(ptr) bind(c)
+    use gibbs, only: dtype => aqueoussolution
+    type(c_ptr), intent(out) :: ptr
+    type(dtype), pointer :: t
+    allocate(t)
+    ptr = c_loc(t)
+  end subroutine
+  
+  subroutine gibbs_dealloc_aqueoussolution(ptr) bind(c)
+    use gibbs, only: dtype => aqueoussolution
+    type(c_ptr), intent(in) :: ptr
+    type(dtype), pointer :: t
+    call c_f_pointer(ptr, t)
+    deallocate(t)
+  end subroutine
+  
+  subroutine gibbs_aqueoussolution_init(ptr, species_dim, species, err_len, err) bind(c)
+    use gibbs, only: dtype => aqueoussolution
+    use gibbs, only: STR_LEN
+    type(c_ptr), intent(in) :: ptr
+    integer(c_int64_t), intent(in) :: species_dim
+    character(kind=c_char), intent(in) :: species(species_dim*STR_LEN)
+    integer(c_int64_t), intent(out) :: err_len
+    type(c_ptr), intent(out) :: err
+    
+    character(len=STR_LEN) :: species_f(species_dim)
+    character(len=:), allocatable, target :: err_f
+    character(len=:), pointer :: err_p
+    type(dtype), pointer :: t
+    integer :: i, k
+    
+    call c_f_pointer(ptr, t)
+    
+    do i =1,species_dim
+      k = (i-1)*STR_LEN+1
+      call copy_string_ctof(species(k:k+STR_LEN), species_f(i)(1:STR_LEN))
+    enddo
+
+    call t%init(species_f, err_f)
+    if (allocated(err_f)) then
+      err_len = len(err_f)
+      allocate(character(len=err_len)::err_p)
+      err_p = err_f
+      err = c_loc(err_p)
+    else
+      err_len = 0
+      err = c_null_ptr
+    endif
+    
+  end subroutine
+  
+  subroutine gibbs_aqueoussolution_equilibrate(ptr, m_dim, m, T, P, err_len, err) bind(c)
+    use gibbs, only: dtype => aqueoussolution
+    type(c_ptr), intent(in) :: ptr
+    integer(c_int64_t), intent(in) :: m_dim
+    real(c_double), intent(inout) :: m(m_dim)
+    real(c_double), intent(in) :: T
+    real(c_double), intent(in) :: P
+    integer(c_int64_t), intent(out) :: err_len
+    type(c_ptr), intent(out) :: err
+    
+    character(len=:), allocatable, target :: err_f
+    character(len=:), pointer :: err_p
+    type(dtype), pointer :: tt
+    
+    call c_f_pointer(ptr, tt)
+
+    call tt%equilibrate(m, T, P, err_f)
+    if (allocated(err_f)) then
+      err_len = len(err_f)
+      allocate(character(len=err_len)::err_p)
+      err_p = err_f
+      err = c_loc(err_p)
+    else
+      err_len = 0
+      err = c_null_ptr
+    endif
+    
+  end subroutine
+  
+  subroutine gibbs_aqueoussolution_xtol_get(ptr, val) bind(c)
+    use gibbs, only: dtype => aqueoussolution
+    type(c_ptr), intent(in) :: ptr
+    real(c_double), intent(out) :: val
+    
+    type(dtype), pointer :: t
+    call c_f_pointer(ptr, t)
+    
+    val = t%xtol
+  end subroutine
+  
+  subroutine gibbs_aqueoussolution_xtol_set(ptr, val) bind(c)
+    use gibbs, only: dtype => aqueoussolution
+    type(c_ptr), intent(in) :: ptr
+    real(c_double), intent(in) :: val
+    
+    type(dtype), pointer :: t
+    call c_f_pointer(ptr, t)
+    
+    t%xtol = val
+  end subroutine
+  
+  subroutine gibbs_aqueoussolution_conserv_tol_get(ptr, val) bind(c)
+    use gibbs, only: dtype => aqueoussolution
+    type(c_ptr), intent(in) :: ptr
+    real(c_double), intent(out) :: val
+    
+    type(dtype), pointer :: t
+    call c_f_pointer(ptr, t)
+    
+    val = t%conserv_tol
+  end subroutine
+  
+  subroutine gibbs_aqueoussolution_conserv_tol_set(ptr, val) bind(c)
+    use gibbs, only: dtype => aqueoussolution
+    type(c_ptr), intent(in) :: ptr
+    real(c_double), intent(in) :: val
+    
+    type(dtype), pointer :: t
+    call c_f_pointer(ptr, t)
+    
+    t%conserv_tol = val
+  end subroutine
+  
+  
   subroutine gibbs_gibbs_energy(species_len, species, T, P, err_len, err, G) bind(c)
     use gibbs, only: gibbs_energy
     integer(c_int64_t), intent(in) :: species_len
@@ -33,7 +158,7 @@ contains
 
   end subroutine
   
-  subroutine gibbs_gibbs_energy_err(err_len, err_cp, err) bind(c)
+  subroutine gibbs_err(err_len, err_cp, err) bind(c)
     integer(c_int64_t), intent(in) :: err_len
     type(c_ptr), intent(in), value :: err_cp
     character(kind=c_char), intent(out) :: err(err_len)

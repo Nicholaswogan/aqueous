@@ -19,7 +19,7 @@ CPMAddPackage("gh:Nicholaswogan/fortran-yaml-c@0.1.0")
 CPMAddPackage(
   NAME nlopt-f
   VERSION 0.1.1
-  URL "https://github.com/Nicholaswogan/nlopt-f/archive/refs/heads/jacobian_patch.zip"
+  URL "https://github.com/grimme-lab/nlopt-f/archive/8e36c15a6d83e11d615702ae5865c7ebe447e4de.zip"
   EXCLUDE_FROM_ALL ON
 )
 

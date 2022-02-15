@@ -12,15 +12,17 @@ module gibbs_equilibrium
     type(GibbsData) :: d
     
     real(dp), allocatable :: DG(:)
+    real(dp) :: G_init
     real(dp), allocatable :: n_init(:)
     real(dp), allocatable :: m_init(:)
+    real(dp) :: G_opt
     real(dp), allocatable :: n_opt(:)
     real(dp), allocatable :: m_opt(:)
     real(dp), allocatable :: atoms_init(:)
     real(dp), allocatable :: T
     real(dp), allocatable :: P
     
-    real(dp) :: xtol = 1.0e-9_dp
+    real(dp) :: xtol = 1.0e-6_dp
     real(dp) :: conserv_tol = 1.0e-9_dp
     real(dp) :: lb = 1.0e-50_dp
     real(dp) :: ub = 5.0_dp
@@ -42,7 +44,7 @@ contains
     use nlopt_enum, only : NLOPT_SUCCESS, algorithm_from_string, result_to_string
     
     class(AqueousSolution), intent(inout), target :: self
-    real(dp), intent(in) :: m(:)
+    real(dp), intent(inout) :: m(:)
     real(dp), intent(in) :: T
     real(dp), intent(in) :: P
     character(len=:), allocatable, intent(out) :: err
@@ -149,7 +151,9 @@ contains
       err = "NLOPT optimization failed: "//result_to_string(stat)
     endif
     
+    self%G_opt = minf
     self%m_opt = self%n_opt(2:)/(self%n_opt(1)*mu_H2O)
+    m = self%m_opt
     
   end subroutine
 
@@ -169,22 +173,13 @@ contains
     end select
     
     if (present(gradient)) then
-      gradient(1) = s%DG(1) + sum(-x(2:)*Rgas*s%T/x(1))
+      gradient(1) = s%DG(1) + (Rgas*s%T/x(1))*sum(-x(2:))
       do i = 2,size(gradient)
-        gradient(i) = s%DG(i) + Rgas*s%T + Rgas*s%T*log(x(i)) &
-                     - Rgas*s%T*log(x(1)) - Rgas*s%T*log(mu_H2O)
+        gradient(i) = s%DG(i) + Rgas*s%T*log(x(i)/x(1)/mu_H2O)
       enddo
-      
-      ! gradient(1) = s%DG(1) + (Rgas*s%T/x(1))*sum(-x(2:))
-      ! do i = 2,size(gradient)
-      !   gradient(i) = s%DG(i) + Rgas*s%T*log(x(i)/x(1)/mu_H2O)
-      ! enddo
-      
     endif
     
-    f = x(1)*s%DG(1) + sum(x(2:)*(s%DG(2:) + Rgas*s%T*log(x(2:)/x(1)/mu_H2O)))
-    
-    ! f = x(1)*(s%DG(1) - (sum(x(2:))/x(1))*Rgas*s%T) + sum(x(2:)*(s%DG(2:) + Rgas*s%T*log(x(2:)/x(1)/mu_H2O)))
+    f = x(1)*(s%DG(1) - (sum(x(2:))/x(1))*Rgas*s%T) + sum(x(2:)*(s%DG(2:) + Rgas*s%T*log(x(2:)/x(1)/mu_H2O)))
     
   end function
   
