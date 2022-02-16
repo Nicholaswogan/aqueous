@@ -15,3 +15,7 @@ void gibbs_aqueoussolution_xtol_get(void *ptr, double *val);
 void gibbs_aqueoussolution_xtol_set(void *ptr, double *val);
 void gibbs_aqueoussolution_conserv_tol_get(void *ptr, double *val);
 void gibbs_aqueoussolution_conserv_tol_set(void *ptr, double *val);
+void gibbs_aqueoussolution_g_init_get(void *ptr, double *val);
+void gibbs_aqueoussolution_g_opt_get(void *ptr, double *val);
+void gibbs_aqueoussolution_algorithm_get(void *ptr, char *val);
+void gibbs_aqueoussolution_algorithm_set(void *ptr, int64_t *val_len, char *val);

@@ -128,6 +128,51 @@ contains
     t%conserv_tol = val
   end subroutine
   
+  subroutine gibbs_aqueoussolution_g_init_get(ptr, val) bind(c)
+    use gibbs, only: dtype => aqueoussolution
+    type(c_ptr), intent(in) :: ptr
+    real(c_double), intent(out) :: val
+    
+    type(dtype), pointer :: t
+    call c_f_pointer(ptr, t)
+    
+    val = t%g_init
+  end subroutine
+  
+  subroutine gibbs_aqueoussolution_g_opt_get(ptr, val) bind(c)
+    use gibbs, only: dtype => aqueoussolution
+    type(c_ptr), intent(in) :: ptr
+    real(c_double), intent(out) :: val
+    
+    type(dtype), pointer :: t
+    call c_f_pointer(ptr, t)
+    
+    val = t%g_opt
+  end subroutine
+  
+  subroutine gibbs_aqueoussolution_algorithm_get(ptr, val) bind(c)
+    use gibbs, only: dtype => aqueoussolution
+    use gibbs, only: STR_LEN
+    type(c_ptr), intent(in) :: ptr
+    character(kind=c_char), intent(out) :: val(STR_LEN)
+    
+    type(dtype), pointer :: t
+    call c_f_pointer(ptr, t)
+    
+    call copy_string_ftoc(t%algorithm, val)
+  end subroutine
+  
+  subroutine gibbs_aqueoussolution_algorithm_set(ptr, val_len, val) bind(c)
+    use gibbs, only: dtype => aqueoussolution
+    type(c_ptr), intent(in) :: ptr
+    integer(c_int64_t), intent(in) :: val_len
+    character(kind=c_char), intent(in) :: val(val_len)
+    
+    type(dtype), pointer :: t
+    call c_f_pointer(ptr, t)
+    
+    call copy_string_ctof(val, t%algorithm)
+  end subroutine
   
   subroutine gibbs_gibbs_energy(species_len, species, T, P, err_len, err, G) bind(c)
     use gibbs, only: gibbs_energy

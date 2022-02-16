@@ -32,7 +32,6 @@ cpdef api double gibbs_energy(str species, double T, double P) except? -1.0:
   if err:
     err_ = np.zeros((),dtype=np.dtype(('S', err_len)))
     pxd.gibbs_err(&err_len, err, <char *> err_.data)
-    print(err_)
     raise Exception(err_.item().decode())
   return G
   
@@ -72,6 +71,31 @@ cdef class AqueousSolution:
       return val
     def __set__(self, double val):
       pxd.gibbs_aqueoussolution_conserv_tol_set(&self._ptr, &val)
+      
+  property G_init:
+    def __get__(self):
+      cdef double val;
+      pxd.gibbs_aqueoussolution_g_init_get(&self._ptr, &val)
+      return val
+      
+  property G_opt:
+    def __get__(self):
+      cdef double val;
+      pxd.gibbs_aqueoussolution_g_opt_get(&self._ptr, &val)
+      return val
+      
+  property algorithm:
+    def __get__(self):
+      cdef char val[STR_LEN];
+      pxd.gibbs_aqueoussolution_algorithm_get(&self._ptr, val)
+      return val.decode()
+    def __set__(self, str val):
+      cdef int64_t val_len
+      cdef char *val_c
+      cdef bytes val_b = val.encode()
+      val_c = val_b
+      val_len = len(val)
+      pxd.gibbs_aqueoussolution_algorithm_set(&self._ptr, &val_len, val_c)  
       
   def equilibrate(self, ndarray[double, ndim=1] m, double T, double P):
     cdef int64_t m_dim = m.shape[0]

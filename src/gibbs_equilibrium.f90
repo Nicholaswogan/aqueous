@@ -26,8 +26,9 @@ module gibbs_equilibrium
     real(dp) :: conserv_tol = 1.0e-9_dp
     real(dp) :: lb = 1.0e-50_dp
     real(dp) :: ub = 5.0_dp
+    real(dp) :: maxtime = 5.0_dp
     character(len=STR_LEN) :: algorithm = "LD_MMA"
-    
+      
   contains
     procedure :: init => AqueousSolution_init
     procedure :: equilibrate => AqueousSolution_equilibrate
@@ -93,6 +94,7 @@ contains
     w(1) = 0.0_dp
     call opt%set_xtol_rel(self%xtol)
     call opt%set_x_weights(w)
+    call opt%set_maxtime(self%maxtime)
     
     ! Set Optimizer
     algorithm = algorithm_from_string(trim(self%algorithm))
@@ -103,6 +105,7 @@ contains
     call create(opt_other, algorithm, self%d%nsp)
     call opt_other%set_xtol_rel(self%xtol)
     call opt_other%set_x_weights(w)
+    call opt_other%set_maxtime(self%maxtime)
     
     call opt%set_local_optimizer(opt_other, stat)
     if (stat /= NLOPT_SUCCESS) then
@@ -145,10 +148,12 @@ contains
       return
     endif
     
+    self%G_init = AqueousSolution_obj(x=self%n_init, func_data=self)
     self%n_opt = self%n_init
     call opt%optimize(self%n_opt, minf, stat)
-    if (stat < NLOPT_SUCCESS) then
+    if (stat < NLOPT_SUCCESS .or. stat == 6) then
       err = "NLOPT optimization failed: "//result_to_string(stat)
+      return
     endif
     
     self%G_opt = minf
