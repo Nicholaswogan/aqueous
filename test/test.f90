@@ -1,5 +1,5 @@
 program test
-  use gibbs, only: gibbs_energy, load_spronsbl, dp, AqueousSolution, STR_LEN
+  use aqueous, only: gibbs_energy, load_spronsbl, dp, AqueousSolution, STR_LEN
   implicit none
   
   character(len=:), allocatable :: err

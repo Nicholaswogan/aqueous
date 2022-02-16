@@ -1,5 +1,5 @@
-module gibbs_types
-  use gibbs_constants, only: dp, STR_LEN
+module aqueous_types
+  use aqueous_constants, only: dp, STR_LEN
   implicit none
   
   type :: ThermodynamicData
@@ -9,7 +9,7 @@ module gibbs_types
     real(dp), allocatable :: data(:,:)
   end type
   
-  type :: GibbsData
+  type :: AqueousData
     integer :: natoms
     integer :: nsp
     character(len=STR_LEN), allocatable :: species_names(:)
@@ -18,7 +18,7 @@ module gibbs_types
     type(ThermodynamicData), allocatable :: thermo(:)
   end type
   
-  type, extends(GibbsData) :: AllData
+  type, extends(AqueousData) :: AllData
     character(len=STR_LEN), allocatable :: alt_names(:)
   end type
   

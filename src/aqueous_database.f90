@@ -1,5 +1,5 @@
-module gibbs_database
-  use gibbs_constants, only: dp, STR_LEN
+module aqueous_database
+  use aqueous_constants, only: dp, STR_LEN
   implicit none
   
   public
@@ -7,7 +7,7 @@ module gibbs_database
 contains
     
   function gibbs_energy(species, T, P, err) result(G)
-    use gibbs_types, only: as
+    use aqueous_types, only: as
     character(len=*), intent(in) :: species
     real(dp), intent(in) :: T, P
     character(len=:), allocatable, intent(out) :: err
@@ -28,7 +28,7 @@ contains
   end function
   
   pure subroutine gibbs_energy_eval(thermo, T, P, found, gibbs_energy)
-    use gibbs_types, only: ThermodynamicData
+    use aqueous_types, only: ThermodynamicData
     
     type(ThermodynamicData), intent(in) :: thermo
     real(dp), intent(in) :: T, P
@@ -95,7 +95,7 @@ contains
   end function
   
   pure function gibbs_energy_nasa9(coeffs, T) result(gibbs)
-    use gibbs_constants, only: Rgas
+    use aqueous_constants, only: Rgas
     real(dp), intent(in) :: coeffs(9)
     real(dp), intent(in) :: T
     real(dp) :: gibbs
@@ -162,7 +162,7 @@ contains
   end function
   
   subroutine load_spronsbl(path)
-    use gibbs_types, only: as
+    use aqueous_types, only: as
     use fortran_yaml_c, only: parse, error_length
     use yaml_types, only: type_node, type_dictionary
     
@@ -194,7 +194,7 @@ contains
   end subroutine
   
   subroutine process_spronsbl(root, as, err)
-    use gibbs_types, only: AllData
+    use aqueous_types, only: AllData
     use yaml_types, only: type_node, type_dictionary, type_error, real_kind, &
                           type_list, type_list_item, type_scalar, type_key_value_pair
                     
@@ -278,7 +278,7 @@ contains
   end subroutine
   
   subroutine get_sprons96_thermo(dict, thermo, err)
-    use gibbs_types, only: ThermodynamicData
+    use aqueous_types, only: ThermodynamicData
     use yaml_types, only: type_dictionary, type_error, &
                           type_list, type_list_item, type_scalar
     
@@ -334,7 +334,7 @@ contains
   end subroutine
   
   subroutine get_nasa9_thermo(dict, thermo, err)
-    use gibbs_types, only: ThermodynamicData
+    use aqueous_types, only: ThermodynamicData
     use yaml_types, only: type_dictionary, type_error, &
                           type_list, type_list_item, type_scalar
     

@@ -4,7 +4,7 @@ import sys
 import os
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.dirname(SCRIPT_DIR))
-from gibbs import gibbs_energy, AqueousSolution
+from aqueous import gibbs_energy, AqueousSolution
 import numpy as np
 
 def test_waterdissociation():

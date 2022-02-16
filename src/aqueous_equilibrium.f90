@@ -1,6 +1,6 @@
-module gibbs_equilibrium
-  use gibbs_constants, only: dp, STR_LEN
-  use gibbs_types, only: GibbsData
+module aqueous_equilibrium
+  use aqueous_constants, only: dp, STR_LEN
+  use aqueous_types, only: AqueousData
   use nlopt_wrap, only : nlopt_opt
   implicit none
   
@@ -9,7 +9,7 @@ module gibbs_equilibrium
   end type
   
   type :: AqueousSolution
-    type(GibbsData) :: d
+    type(AqueousData) :: d
     
     real(dp), allocatable :: DG(:)
     real(dp) :: G_init
@@ -37,8 +37,8 @@ module gibbs_equilibrium
 contains
   
   subroutine AqueousSolution_equilibrate(self, m, T, P, err)
-    use gibbs_constants, only: Rgas, mu_H2O
-    use gibbs_database, only: gibbs_energy_eval
+    use aqueous_constants, only: Rgas, mu_H2O
+    use aqueous_database, only: gibbs_energy_eval
     ! use nlopt_enum, only : NLOPT_SUCCESS
     
     use nlopt_wrap, only : create, nlopt_func, nlopt_mfunc
@@ -163,7 +163,7 @@ contains
   end subroutine
 
   function AqueousSolution_obj(x, gradient, func_data) result(f)
-    use gibbs_constants, only: Rgas, mu_H2O
+    use aqueous_constants, only: Rgas, mu_H2O
     real(dp), intent(in) :: x(:)
     real(dp), intent(inout), optional :: gradient(:)
     class(*), intent(in), optional :: func_data
@@ -248,11 +248,11 @@ contains
   end subroutine
   
   subroutine process_species(species, dat, err)
-    use gibbs_database, only: find_species_ind
-    use gibbs_types, only: as
+    use aqueous_database, only: find_species_ind
+    use aqueous_types, only: as
     
     character(len=STR_LEN), intent(in) :: species(:)
-    type(GibbsData), intent(out) :: dat
+    type(AqueousData), intent(out) :: dat
     character(len=:), allocatable, intent(out) :: err
     
     character(len=:), allocatable :: dups

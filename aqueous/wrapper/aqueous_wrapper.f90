@@ -1,28 +1,28 @@
-module gibbs_wrapper
+module aqueous_wrapper
   use iso_c_binding
   implicit none
 
 contains
   
-  subroutine gibbs_alloc_aqueoussolution(ptr) bind(c)
-    use gibbs, only: dtype => aqueoussolution
+  subroutine aqueous_alloc_aqueoussolution(ptr) bind(c)
+    use aqueous, only: dtype => aqueoussolution
     type(c_ptr), intent(out) :: ptr
     type(dtype), pointer :: t
     allocate(t)
     ptr = c_loc(t)
   end subroutine
   
-  subroutine gibbs_dealloc_aqueoussolution(ptr) bind(c)
-    use gibbs, only: dtype => aqueoussolution
+  subroutine aqueous_dealloc_aqueoussolution(ptr) bind(c)
+    use aqueous, only: dtype => aqueoussolution
     type(c_ptr), intent(in) :: ptr
     type(dtype), pointer :: t
     call c_f_pointer(ptr, t)
     deallocate(t)
   end subroutine
   
-  subroutine gibbs_aqueoussolution_init(ptr, species_dim, species, err_len, err) bind(c)
-    use gibbs, only: dtype => aqueoussolution
-    use gibbs, only: STR_LEN
+  subroutine aqueous_aqueoussolution_init(ptr, species_dim, species, err_len, err) bind(c)
+    use aqueous, only: dtype => aqueoussolution
+    use aqueous, only: STR_LEN
     type(c_ptr), intent(in) :: ptr
     integer(c_int64_t), intent(in) :: species_dim
     character(kind=c_char), intent(in) :: species(species_dim*STR_LEN)
@@ -55,8 +55,8 @@ contains
     
   end subroutine
   
-  subroutine gibbs_aqueoussolution_equilibrate(ptr, m_dim, m, T, P, err_len, err) bind(c)
-    use gibbs, only: dtype => aqueoussolution
+  subroutine aqueous_aqueoussolution_equilibrate(ptr, m_dim, m, T, P, err_len, err) bind(c)
+    use aqueous, only: dtype => aqueoussolution
     type(c_ptr), intent(in) :: ptr
     integer(c_int64_t), intent(in) :: m_dim
     real(c_double), intent(inout) :: m(m_dim)
@@ -84,8 +84,8 @@ contains
     
   end subroutine
   
-  subroutine gibbs_aqueoussolution_xtol_get(ptr, val) bind(c)
-    use gibbs, only: dtype => aqueoussolution
+  subroutine aqueous_aqueoussolution_xtol_get(ptr, val) bind(c)
+    use aqueous, only: dtype => aqueoussolution
     type(c_ptr), intent(in) :: ptr
     real(c_double), intent(out) :: val
     
@@ -95,8 +95,8 @@ contains
     val = t%xtol
   end subroutine
   
-  subroutine gibbs_aqueoussolution_xtol_set(ptr, val) bind(c)
-    use gibbs, only: dtype => aqueoussolution
+  subroutine aqueous_aqueoussolution_xtol_set(ptr, val) bind(c)
+    use aqueous, only: dtype => aqueoussolution
     type(c_ptr), intent(in) :: ptr
     real(c_double), intent(in) :: val
     
@@ -106,8 +106,8 @@ contains
     t%xtol = val
   end subroutine
   
-  subroutine gibbs_aqueoussolution_conserv_tol_get(ptr, val) bind(c)
-    use gibbs, only: dtype => aqueoussolution
+  subroutine aqueous_aqueoussolution_conserv_tol_get(ptr, val) bind(c)
+    use aqueous, only: dtype => aqueoussolution
     type(c_ptr), intent(in) :: ptr
     real(c_double), intent(out) :: val
     
@@ -117,8 +117,8 @@ contains
     val = t%conserv_tol
   end subroutine
   
-  subroutine gibbs_aqueoussolution_conserv_tol_set(ptr, val) bind(c)
-    use gibbs, only: dtype => aqueoussolution
+  subroutine aqueous_aqueoussolution_conserv_tol_set(ptr, val) bind(c)
+    use aqueous, only: dtype => aqueoussolution
     type(c_ptr), intent(in) :: ptr
     real(c_double), intent(in) :: val
     
@@ -128,8 +128,8 @@ contains
     t%conserv_tol = val
   end subroutine
   
-  subroutine gibbs_aqueoussolution_g_init_get(ptr, val) bind(c)
-    use gibbs, only: dtype => aqueoussolution
+  subroutine aqueous_aqueoussolution_g_init_get(ptr, val) bind(c)
+    use aqueous, only: dtype => aqueoussolution
     type(c_ptr), intent(in) :: ptr
     real(c_double), intent(out) :: val
     
@@ -139,8 +139,8 @@ contains
     val = t%g_init
   end subroutine
   
-  subroutine gibbs_aqueoussolution_g_opt_get(ptr, val) bind(c)
-    use gibbs, only: dtype => aqueoussolution
+  subroutine aqueous_aqueoussolution_g_opt_get(ptr, val) bind(c)
+    use aqueous, only: dtype => aqueoussolution
     type(c_ptr), intent(in) :: ptr
     real(c_double), intent(out) :: val
     
@@ -150,9 +150,9 @@ contains
     val = t%g_opt
   end subroutine
   
-  subroutine gibbs_aqueoussolution_algorithm_get(ptr, val) bind(c)
-    use gibbs, only: dtype => aqueoussolution
-    use gibbs, only: STR_LEN
+  subroutine aqueous_aqueoussolution_algorithm_get(ptr, val) bind(c)
+    use aqueous, only: dtype => aqueoussolution
+    use aqueous, only: STR_LEN
     type(c_ptr), intent(in) :: ptr
     character(kind=c_char), intent(out) :: val(STR_LEN)
     
@@ -162,8 +162,8 @@ contains
     call copy_string_ftoc(t%algorithm, val)
   end subroutine
   
-  subroutine gibbs_aqueoussolution_algorithm_set(ptr, val_len, val) bind(c)
-    use gibbs, only: dtype => aqueoussolution
+  subroutine aqueous_aqueoussolution_algorithm_set(ptr, val_len, val) bind(c)
+    use aqueous, only: dtype => aqueoussolution
     type(c_ptr), intent(in) :: ptr
     integer(c_int64_t), intent(in) :: val_len
     character(kind=c_char), intent(in) :: val(val_len)
@@ -174,8 +174,8 @@ contains
     call copy_string_ctof(val, t%algorithm)
   end subroutine
   
-  subroutine gibbs_gibbs_energy(species_len, species, T, P, err_len, err, G) bind(c)
-    use gibbs, only: gibbs_energy
+  subroutine aqueous_gibbs_energy(species_len, species, T, P, err_len, err, G) bind(c)
+    use aqueous, only: gibbs_energy
     integer(c_int64_t), intent(in) :: species_len
     character(kind=c_char), intent(in) :: species(species_len)
     real(c_double), intent(in) :: T
@@ -203,7 +203,7 @@ contains
 
   end subroutine
   
-  subroutine gibbs_err(err_len, err_cp, err) bind(c)
+  subroutine aqueous_err(err_len, err_cp, err) bind(c)
     integer(c_int64_t), intent(in) :: err_len
     type(c_ptr), intent(in), value :: err_cp
     character(kind=c_char), intent(out) :: err(err_len)
@@ -216,8 +216,8 @@ contains
     
   end subroutine
   
-  subroutine gibbs_load_spronsbl(path_len, path) bind(c)
-    use gibbs, only: load_spronsbl
+  subroutine aqueous_load_spronsbl(path_len, path) bind(c)
+    use aqueous, only: load_spronsbl
     integer(c_int64_t), intent(in) :: path_len
     character(kind=c_char), intent(in) :: path(path_len)
     
