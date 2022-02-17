@@ -1,12 +1,12 @@
 cmake_minimum_required(VERSION 3.14)
 
-project(AQUEOUS VERSION 0.1.0 LANGUAGES Fortran C)
+project(AQUEOUS LANGUAGES Fortran C VERSION "0.1.0")
 
 # options
 option(SKBUILD "Should be ON of being build by skbuild, 
 and OFF of being build by regular cmake" OFF)
 
-option(BUILD_PYTHON_aqueous "if ON, then will build a python
+option(BUILD_PYTHON_AQUEOUS "if ON, then will build a python
 version via Cython" OFF)
 
 set(CMAKE_Fortran_MODULE_DIRECTORY "${CMAKE_BINARY_DIR}/modules")

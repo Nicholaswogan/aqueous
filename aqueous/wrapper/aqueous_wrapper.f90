@@ -106,6 +106,50 @@ contains
     t%xtol = val
   end subroutine
   
+  subroutine aqueous_aqueoussolution_ftol_get(ptr, val) bind(c)
+    use aqueous, only: dtype => aqueoussolution
+    type(c_ptr), intent(in) :: ptr
+    real(c_double), intent(out) :: val
+    
+    type(dtype), pointer :: t
+    call c_f_pointer(ptr, t)
+    
+    val = t%ftol
+  end subroutine
+  
+  subroutine aqueous_aqueoussolution_ftol_set(ptr, val) bind(c)
+    use aqueous, only: dtype => aqueoussolution
+    type(c_ptr), intent(in) :: ptr
+    real(c_double), intent(in) :: val
+    
+    type(dtype), pointer :: t
+    call c_f_pointer(ptr, t)
+    
+    t%ftol = val
+  end subroutine
+
+  subroutine aqueous_aqueoussolution_maxtime_get(ptr, val) bind(c)
+    use aqueous, only: dtype => aqueoussolution
+    type(c_ptr), intent(in) :: ptr
+    real(c_double), intent(out) :: val
+    
+    type(dtype), pointer :: t
+    call c_f_pointer(ptr, t)
+    
+    val = t%maxtime
+  end subroutine
+
+  subroutine aqueous_aqueoussolution_maxtime_set(ptr, val) bind(c)
+    use aqueous, only: dtype => aqueoussolution
+    type(c_ptr), intent(in) :: ptr
+    real(c_double), intent(in) :: val
+    
+    type(dtype), pointer :: t
+    call c_f_pointer(ptr, t)
+    
+    t%maxtime = val
+  end subroutine
+  
   subroutine aqueous_aqueoussolution_conserv_tol_get(ptr, val) bind(c)
     use aqueous, only: dtype => aqueoussolution
     type(c_ptr), intent(in) :: ptr

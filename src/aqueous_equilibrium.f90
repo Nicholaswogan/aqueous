@@ -4,10 +4,6 @@ module aqueous_equilibrium
   use nlopt_wrap, only : nlopt_opt
   implicit none
   
-  type :: constraint_data
-    real(dp) :: d(2)
-  end type
-  
   type :: AqueousSolution
     type(AqueousData) :: d
     
@@ -23,16 +19,21 @@ module aqueous_equilibrium
     real(dp), allocatable :: P
     
     real(dp) :: xtol = 1.0e-6_dp
+    real(dp) :: ftol = 1.0e-17_dp
     real(dp) :: conserv_tol = 1.0e-9_dp
     real(dp) :: lb = 1.0e-50_dp
     real(dp) :: ub = 5.0_dp
-    real(dp) :: maxtime = 5.0_dp
+    real(dp) :: maxtime = 1.0_dp
     character(len=STR_LEN) :: algorithm = "LD_MMA"
-      
+    
   contains
     procedure :: init => AqueousSolution_init
     procedure :: equilibrate => AqueousSolution_equilibrate
   end type
+  
+  interface AqueousSolution
+    procedure :: AqueousSolution_init1
+  end interface
 
 contains
   
@@ -69,7 +70,7 @@ contains
   
     self%m_init = m
     self%n_init(1) = mol_H2O
-    self%n_init(2:) = m*kg_H2O
+    self%n_init(2:) = self%m_init*kg_H2O
     
     do i = 1,self%d%natoms
       self%atoms_init(i) = sum(self%d%species_atoms(i,:)*self%n_init)
@@ -92,6 +93,7 @@ contains
     allocate(w(self%d%nsp))
     w = 1.0_dp
     w(1) = 0.0_dp
+    call opt%set_ftol_rel(self%ftol)
     call opt%set_xtol_rel(self%xtol)
     call opt%set_x_weights(w)
     call opt%set_maxtime(self%maxtime)
@@ -103,6 +105,7 @@ contains
       return
     endif
     call create(opt_other, algorithm, self%d%nsp)
+    call opt_other%set_ftol_rel(self%ftol)
     call opt_other%set_xtol_rel(self%xtol)
     call opt_other%set_x_weights(w)
     call opt_other%set_maxtime(self%maxtime)
@@ -123,7 +126,7 @@ contains
     endif
     
     allocate(lb(self%d%nsp))
-    lb(1) = 30.0_dp
+    lb(1) = 0.7_dp*mol_H2O
     lb(2:) = self%lb
     call opt%set_lower_bounds(lb, stat)
     if (stat /= NLOPT_SUCCESS) then
@@ -132,7 +135,7 @@ contains
     endif
     
     allocate(ub(self%d%nsp))
-    ub(1) = 70.0_dp
+    ub(1) = 1.3_dp*mol_H2O
     ub(2:) = self%ub
     call opt%set_upper_bounds(ub, stat)
     if (stat /= NLOPT_SUCCESS) then
@@ -189,43 +192,51 @@ contains
   end function
   
   subroutine AqueousSolution_con(result, x, gradient, func_data)
-      real(dp), intent(inout) :: result(:)
-      real(dp), intent(in) :: x(:)
-      real(dp), intent(inout), optional :: gradient(:,:)
-      class(*), intent(in), optional :: func_data
-      
-      type(AqueousSolution), pointer :: s
-      integer :: i, j, n, m
-      
-      select type(func_data)
-      type is(AqueousSolution)
-        s => func_data
-      end select
-      
-      m = s%d%natoms
-      n = s%d%nsp
-      
-      if (present(gradient)) then
-        do j = 1,m
-          do i = 1,n
-            gradient(i,j) = s%d%species_atoms(j,i)
-          enddo
+    real(dp), intent(inout) :: result(:)
+    real(dp), intent(in) :: x(:)
+    real(dp), intent(inout), optional :: gradient(:,:)
+    class(*), intent(in), optional :: func_data
+    
+    type(AqueousSolution), pointer :: s
+    integer :: i, j, n, m
+    
+    select type(func_data)
+    type is(AqueousSolution)
+      s => func_data
+    end select
+    
+    m = s%d%natoms
+    n = s%d%nsp
+    
+    if (present(gradient)) then
+      do j = 1,m
+        do i = 1,n
+          gradient(i,j) = s%d%species_atoms(j,i)
         enddo
-      endif
-      
-      do i = 1,m
-        result(i) = sum(s%d%species_atoms(i,:)*x)
       enddo
-      result = result - s%atoms_init
-      
-
-    end subroutine
+    endif
+    
+    do i = 1,m
+      result(i) = sum(s%d%species_atoms(i,:)*x)
+    enddo
+    result = result - s%atoms_init
+    
+  end subroutine
+  
+  function AqueousSolution_init1(species, err) result(self)
+    type(AqueousSolution) :: self
+    character(len=STR_LEN), intent(in) :: species(:)
+    character(len=:), allocatable, intent(out) :: err
+    
+    call AqueousSolution_init(self, species, err)
+    
+  end function
   
   subroutine AqueousSolution_init(self, species, err)
     use nlopt_wrap, only : create, nlopt_func, nlopt_mfunc
     use nlopt_enum, only : algorithm_from_string, NLOPT_SUCCESS
     
-    class(AqueousSolution), intent(inout), target :: self
+    class(AqueousSolution), intent(inout) :: self
     character(len=STR_LEN), intent(in) :: species(:)
     character(len=:), allocatable, intent(out) :: err
     

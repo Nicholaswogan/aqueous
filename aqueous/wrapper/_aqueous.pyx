@@ -64,6 +64,22 @@ cdef class AqueousSolution:
     def __set__(self, double val):
       pxd.aqueous_aqueoussolution_xtol_set(&self._ptr, &val)
       
+  property ftol:
+    def __get__(self):
+      cdef double val;
+      pxd.aqueous_aqueoussolution_ftol_get(&self._ptr, &val)
+      return val
+    def __set__(self, double val):
+      pxd.aqueous_aqueoussolution_ftol_set(&self._ptr, &val)
+      
+  property maxtime:
+    def __get__(self):
+      cdef double val;
+      pxd.aqueous_aqueoussolution_maxtime_get(&self._ptr, &val)
+      return val
+    def __set__(self, double val):
+      pxd.aqueous_aqueoussolution_maxtime_set(&self._ptr, &val)
+      
   property conserv_tol:
     def __get__(self):
       cdef double val;
@@ -108,8 +124,4 @@ cdef class AqueousSolution:
       err_ = np.zeros((),dtype=np.dtype(('S', err_len)))
       pxd.aqueous_err(&err_len, err, <char *> err_.data)
       raise Exception(err_.item().decode())
-  
-
-
-
   
