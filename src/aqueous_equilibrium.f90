@@ -55,7 +55,6 @@ contains
     real(dp), parameter :: mol_H2O = kg_H2O/mu_H2O
     
     integer :: i, stat, algorithm
-    logical :: found
     real(dp) :: minf
     type(nlopt_opt) :: opt, opt_other
     
@@ -80,11 +79,8 @@ contains
     self%P = P
     
     do i = 1,self%d%nsp
-      call gibbs_energy_eval(self%d%thermo(i), T, P, found, self%DG(i))
-      if (.not. found) then
-        err = 'Species "'//trim(self%d%species_names(i))//'" has no thermodynamic data for input temperature.'
-        return
-      endif
+      call gibbs_energy_eval(self%d%species_names(i), self%d%thermo(i), T, P, self%DG(i), err)
+      if (allocated(err)) return
     enddo
     
     ! setup nlopt 
@@ -240,11 +236,6 @@ contains
     character(len=STR_LEN), intent(in) :: species(:)
     character(len=:), allocatable, intent(out) :: err
     
-    integer :: stat, i
-    real(dp), allocatable :: tol(:), lb(:), ub(:)
-    type(nlopt_func) :: f
-    type(nlopt_mfunc) :: fc
-    
     call process_species(species, self%d, err)
     if (allocated(err)) return
     
@@ -266,7 +257,6 @@ contains
     type(AqueousData), intent(out) :: dat
     character(len=:), allocatable, intent(out) :: err
     
-    character(len=:), allocatable :: dups
     integer :: i, j, ind, k
     integer, allocatable :: inds(:)
     logical, allocatable :: existing_atoms(:)

@@ -1,7 +1,8 @@
 
-from numpy cimport ndarray, int8_t, int16_t, int32_t, int64_t
-from libcpp cimport bool, complex
 import numpy as np
+cimport numpy as np
+from numpy cimport ndarray, int8_t, int16_t, int32_t, int64_t
+np.import_array()
 cimport aqueous_pxd as pxd
 import os
 
@@ -21,7 +22,7 @@ cpdef api double gibbs_energy(str species, double T, double P) except? -1.0:
   cdef int64_t species_len
   cdef char *species_c
   cdef int64_t err_len
-  cdef void *err
+  cdef void *err = NULL
   cdef double G
   cdef ndarray err_
   
@@ -41,9 +42,9 @@ cdef class AqueousSolution:
   def __cinit__(self, species_l = None):
     pxd.aqueous_alloc_aqueoussolution(&self._ptr)
     cdef int64_t species_dim = len(species_l)
-    cdef ndarray species = np.array(species_l,dtype=np.dtype(('S', 20)),order='F')
+    cdef ndarray species = np.array(species_l,dtype=np.dtype(('S', STR_LEN)),order='F')
     cdef int64_t err_len;
-    cdef void *err
+    cdef void *err = NULL
     cdef ndarray err_
     
     pxd.aqueous_aqueoussolution_init(&self._ptr, &species_dim, <char *> species.data, &err_len, &err)
@@ -116,7 +117,7 @@ cdef class AqueousSolution:
   def equilibrate(self, ndarray[double, ndim=1] m, double T, double P):
     cdef int64_t m_dim = m.shape[0]
     cdef int64_t err_len;
-    cdef void *err
+    cdef void *err = NULL
     cdef ndarray err_
     
     pxd.aqueous_aqueoussolution_equilibrate(&self._ptr, &m_dim, <double *> m.data, &T, &P, &err_len, &err);

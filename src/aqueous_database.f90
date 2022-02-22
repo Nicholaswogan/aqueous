@@ -14,28 +14,38 @@ contains
     
     real(dp) :: G
     integer :: ind
-    logical :: found
     
     ind = find_species_ind(species, as%species_names, as%alt_names, err)
-    if (allocated(err)) return 
+    if (allocated(err)) return
     
-    call gibbs_energy_eval(as%thermo(ind), T, P, found, G)
-    if (.not. found) then
-      err = 'Species "'//trim(species)//'" has no thermodynamic data for input temperature.'
-      return
-    endif
+    call gibbs_energy_eval(species, as%thermo(ind), T, P, G, err)
+    if (allocated(err)) return
     
   end function
   
-  pure subroutine gibbs_energy_eval(thermo, T, P, found, gibbs_energy)
+  subroutine gibbs_energy_eval(species, thermo, T, P, gibbs_energy, err)
     use aqueous_types, only: ThermodynamicData
     
+    character(len=*), intent(in) :: species
     type(ThermodynamicData), intent(in) :: thermo
     real(dp), intent(in) :: T, P
-    logical, intent(out) :: found
     real(dp), intent(out) :: gibbs_energy
+    character(len=:), allocatable, intent(out) :: err
     
     integer :: k
+    logical :: found
+    character(10) :: P_char, T_char
+    
+    ! check to see if water can exist
+    if (.not. H2O_is_a_liquid(T, P)) then
+      write(P_char,"(es10.1)") P
+      write(T_char,"(es10.1)") T
+      err = "Water is not a liquid at "// &
+            "T = "//trim(adjustl(T_char))//" K and "// &
+            "P = "//trim(adjustl(P_char))//" bar "// &
+            "so aqueous gibbs energy can not be computed for "//trim(species)
+      return
+    endif
     
     found = .false.
     do k = 1,thermo%ntemps
@@ -44,7 +54,6 @@ contains
           
         found = .true.
         if (thermo%dtype == 1) then ! aqueous
-          ! check to see if liquid phase is possible
           gibbs_energy = gibbs_energy_sprons96(thermo%data(:,k), T, P)
         elseif (thermo%dtype == 2) then
           gibbs_energy = gibbs_energy_nasa9(thermo%data(:,k), T)
@@ -54,6 +63,11 @@ contains
         
       endif
     enddo
+    
+    if (.not. found) then
+      err = 'Species "'//trim(species)//'" has no thermodynamic data for input temperature.'
+      return
+    endif
 
   end subroutine
   
@@ -202,19 +216,17 @@ contains
     type(AllData), intent(inout) :: as
     character(len=:), allocatable, intent(out) :: err
     
-    type(type_key_value_pair), pointer :: key_value_pair
-    type(type_list_item), pointer :: item, item1
-    type(type_list), pointer :: atoms, species, list1
+    type(type_list_item), pointer :: item
+    type(type_list), pointer :: atoms, species
     type(type_dictionary), pointer :: dict
-    type (type_error), pointer :: io_err
+    type (type_error), allocatable :: io_err
     character (len=:), allocatable :: tmp
-    logical :: success
     integer :: j, i
 
     atoms => root%get_list("atoms",required=.true.,error = io_err)
-    if (associated(io_err)) then; err = trim(io_err%message); return; endif
+    if (allocated(io_err)) then; err = trim(io_err%message); return; endif
     species => root%get_list("species",required=.true.,error = io_err)
-    if (associated(io_err)) then; err = trim(io_err%message); return; endif
+    if (allocated(io_err)) then; err = trim(io_err%message); return; endif
     
     as%natoms = atoms%size()
     allocate(as%atoms_names(as%natoms))
@@ -242,22 +254,22 @@ contains
       select type (element => item%node)
       class is (type_dictionary)
         as%species_names(j) = trim(element%get_string("name",error = io_err))
-        if (associated(io_err)) then; err = trim(io_err%message); return; endif
+        if (allocated(io_err)) then; err = trim(io_err%message); return; endif
         as%alt_names(j) = trim(element%get_string("alt-name",error = io_err))
-        if (associated(io_err)) then; err = trim(io_err%message); return; endif
+        if (allocated(io_err)) then; err = trim(io_err%message); return; endif
         
         dict => element%get_dictionary("composition",required=.true.,error = io_err)
-        if (associated(io_err)) then; err = trim(io_err%message); return; endif
+        if (allocated(io_err)) then; err = trim(io_err%message); return; endif
         do i = 1, as%natoms
           as%species_atoms(i,j) = dict%get_integer(trim(as%atoms_names(i)), default=0, error = io_err)
-          if (associated(io_err)) then; err = trim(io_err%message); return; endif
+          if (allocated(io_err)) then; err = trim(io_err%message); return; endif
         enddo
         
         dict => element%get_dictionary("thermo",required=.true.,error = io_err)
-        if (associated(io_err)) then; err = trim(io_err%message); return; endif
+        if (allocated(io_err)) then; err = trim(io_err%message); return; endif
         
         tmp = trim(dict%get_string("model",error = io_err))
-        if (associated(io_err)) then; err = trim(io_err%message); return; endif
+        if (allocated(io_err)) then; err = trim(io_err%message); return; endif
         
         if (tmp == "sprons96") then
           call get_sprons96_thermo(dict, as%thermo(j), err)
@@ -288,7 +300,7 @@ contains
     
     type(type_list_item), pointer :: item
     type(type_list), pointer :: list
-    type (type_error), pointer :: io_err
+    type (type_error), allocatable :: io_err
     logical :: success
     integer :: i
     
@@ -298,7 +310,7 @@ contains
     allocate(thermo%data(10,1))
     
     list = dict%get_list("temperature-ranges",required=.true.,error = io_err)
-    if (associated(io_err)) then; err = trim(io_err%message); return; endif
+    if (allocated(io_err)) then; err = trim(io_err%message); return; endif
     i = 1
     item => list%first
     do while(associated(item))
@@ -344,14 +356,14 @@ contains
     
     type(type_list_item), pointer :: item, item1
     type(type_list), pointer :: list
-    type (type_error), pointer :: io_err
+    type (type_error), allocatable :: io_err
     logical :: success
     integer :: j, i
     
     thermo%dtype = 2
     
     list = dict%get_list("temperature-ranges",required=.true.,error = io_err)
-    if (associated(io_err)) then; err = trim(io_err%message); return; endif
+    if (allocated(io_err)) then; err = trim(io_err%message); return; endif
       
     thermo%ntemps = list%size() - 1
     allocate(thermo%temps(thermo%ntemps + 1))
@@ -401,5 +413,37 @@ contains
     enddo
 
   end subroutine
+  
+  pure function H2O_is_a_liquid(T, P) result(res)
+    real(dp), intent(in) :: T ! temperature in K
+    real(dp), intent(in) :: P ! P in bar
+    logical :: res
+    
+    real(dp) :: P_gas_liquid
+    
+    ! Rough computes where water can exist as a liquid
+    ! say anything above 1000 bar is ice. This is wrong
+    ! but phase diagram gets complicated.
+    
+    P_gas_liquid = sat_pressure_H2O(T)
+    res = .true.
+    if (P > 1000.0_dp) res = .false.
+    if (T > 647.0_dp) res = .false.
+    if (T < 273.15_dp) res = .false.
+    if (P < P_gas_liquid) res = .false.
+    
+  end function
+  
+  pure function sat_pressure_H2O(T) result(p_H2O)
+    real(dp), intent(in) :: T ! temperature in K
+    real(dp) :: p_H2O
+    real(dp), parameter :: lc = 2.5e6_dp ! specific enthalpy of H2O vaporization
+    real(dp), parameter :: Rc = 461.0_dp ! gas constant for water
+    real(dp), parameter :: e0 = 611.0_dp ! Pascals
+    real(dp), parameter :: T0 = 273.15_dp ! K
+    ! Catling and Kasting (Equation 1.49)
+    p_H2O = 1.0e-5_dp*e0*exp(lc/Rc*(1/T0 - 1/T))
+    ! output is in bars
+  end function
   
 end module

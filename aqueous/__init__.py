@@ -1,2 +1,1 @@
-from ._aqueous import AqueousSolution
-from .aqueous_nb import gibbs_energy
+from ._aqueous import AqueousSolution, gibbs_energy

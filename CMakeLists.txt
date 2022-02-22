@@ -10,11 +10,19 @@ option(BUILD_PYTHON_AQUEOUS "if ON, then will build a python
 version via Cython" OFF)
 
 set(CMAKE_Fortran_MODULE_DIRECTORY "${CMAKE_BINARY_DIR}/modules")
+if (NOT CMAKE_BUILD_TYPE OR CMAKE_BUILD_TYPE STREQUAL "")
+  set(CMAKE_BUILD_TYPE "Release" CACHE STRING "" FORCE)
+endif()
+
+if ("${CMAKE_Fortran_COMPILER_ID}" MATCHES "GNU")
+  if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+    set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -Wunused")
+  endif()
+endif()
+
 
 include(cmake/CPM.cmake)
-
-CPMAddPackage("gh:Nicholaswogan/fortran-yaml-c@0.1.0")
-# CPMAddPackage("gh:grimme-lab/nlopt-f@0.1.0")
+CPMAddPackage("gh:Nicholaswogan/fortran-yaml-c@0.1.2")
 
 CPMAddPackage(
   NAME nlopt-f
@@ -25,9 +33,9 @@ CPMAddPackage(
 
 add_subdirectory(src)
 
-add_executable(main test/test.f90)
-target_link_libraries(main aqueous)
-target_include_directories(main PUBLIC ${CMAKE_Fortran_MODULE_DIRECTORY})
+add_executable(test_aqueous test/test_aqueous.f90)
+target_link_libraries(test_aqueous aqueous)
+target_include_directories(test_aqueous PUBLIC ${CMAKE_Fortran_MODULE_DIRECTORY})
 
 if (BUILD_PYTHON_AQUEOUS)
   

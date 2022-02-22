@@ -15,8 +15,10 @@ cdef extern void aqueous_load_spronsbl(int64_t *path_len, char *path);
 
 cdef extern void aqueous_alloc_aqueoussolution(void *ptr);
 cdef extern void aqueous_dealloc_aqueoussolution(void *ptr);
+
 cdef extern void aqueous_aqueoussolution_init(void *ptr, int64_t *species_dim, char* species, int64_t *err_len, void *err);
 cdef extern void aqueous_aqueoussolution_equilibrate(void *ptr, int64_t *m_dim, double *m, double *T, double *P, int64_t *err_len, void *err);
+
 cdef extern void aqueous_aqueoussolution_xtol_get(void *ptr, double *val);
 cdef extern void aqueous_aqueoussolution_xtol_set(void *ptr, double *val);
 cdef extern void aqueous_aqueoussolution_ftol_get(void *ptr, double *val);

@@ -4,6 +4,14 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.dirname(SCRIPT_DIR))
 from aqueous import gibbs_energy, AqueousSolution
 import numpy as np
+import numba as nb
+
+def test_gibbs_energy():
+    species = 'NH3,aq'
+    T = 298
+    P = 1
+    G = gibbs_energy(species, T, P)
+    print("Gibbs energy of formation of NH3 at T = 298 K and P = 1 bar:","%f"%G,"J/mol\n")
 
 def test_waterdissociation():
     species = ['H+','OH-']
@@ -29,5 +37,7 @@ def test_enceladus():
     print()
 
 if __name__ == "__main__":
+    print()
+    test_gibbs_energy()
     test_waterdissociation()
     test_enceladus()
