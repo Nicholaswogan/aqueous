@@ -1,8 +1,11 @@
 import sys
 import os
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(os.path.dirname(SCRIPT_DIR))
-from aqueous import gibbs_energy, AqueousSolution
+try:
+    from aqueous import gibbs_energy, AqueousSolution
+except:
+    SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+    sys.path.append(os.path.dirname(SCRIPT_DIR))
+    from aqueous import gibbs_energy, AqueousSolution
 import numpy as np
 import numba as nb
 
