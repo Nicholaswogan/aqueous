@@ -1,6 +1,6 @@
 # Aqueous
 
-`aqueous` computes Gibbs energies of formation for aqueous chemical species, and computes chemical equilibrium for aqueous solutions.
+`aqueous` computes Gibbs energies of formation of aqueous chemical species, and computes chemical equilibrium of aqueous solutions.
 
 ## Installation
 
